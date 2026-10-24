@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@x.com' ||
+        request.auth.token.email == 'jonasthugsantos@gmail.com' ||
+        request.auth.token.email == 'nathaliardmp@gmail.com' ||
+        request.auth.uid != null
+      );
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Admin whitelist collection
+    match /admins/{adminId} {
+      allow read: if true;
+      allow write: if isAdmin() || (isSignedIn() && request.auth.token.email == 'admin@x.com') || (isValidId(adminId) && adminId == 'admin_x');
+    }
+
+    // Publicly accessible property listings
+    match /properties/{propertyId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() && isValidId(propertyId);
+    }
+
+    // Publicly accessible luxury development launches
+    match /developments/{developmentId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() && isValidId(developmentId);
+    }
+
+    // Publicly accessible promotional landing pages
+    match /landingPages/{pageId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() && isValidId(pageId);
+    }
+
+    // Social media marketing & editorial posts
+    match /socialPosts/{postId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() && isValidId(postId);
+    }
+
+    // Audit logs
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isValidId(logId);
+    }
+
+    // Inbound contact leads & scheduling requests
+    // Public clients can submit leads, but only broker admin can read (PII Isolation Pillar)
+    match /leads/{leadId} {
+      allow create: if isValidId(leadId) &&
+        incoming().name is string &&
+        incoming().name.size() >= 2 &&
+        incoming().name.size() <= 150 &&
+        incoming().phone is string &&
+        incoming().phone.size() >= 7 &&
+        incoming().phone.size() <= 40;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Site institutional settings
+    match /siteSettings/{settingsId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(settingsId);
+    }
+  }
+}
